@@ -33,7 +33,7 @@ npm run seed
 npm run dev
 ```
 
-Then open http://localhost:3000. `npm run seed` wipes the database and creates demo users (`mark@`, `sara@`, `omar@`, `emma@chatbook.test`); their shared password is `DEMO_PASSWORD` in `server/src/seed.js`. Log in as two different users in two browsers (or a normal + private window) to chat with yourself.
+Then open http://localhost:3000. `npm run seed` wipes the database and creates 20 demo users with friendships, pending requests, wall posts and conversations — see [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md) for the accounts, password and who is related to whom. Log in as two different users in two browsers (or a normal + private window) to chat with yourself.
 
 ## Configuration
 

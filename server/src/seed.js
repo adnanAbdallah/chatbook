@@ -1,49 +1,71 @@
-// Fills the database with a few demo users, friendships, wall posts and messages.
-// Every demo account uses the password below. Run: npm run seed
+// Wipes the database and fills it with the demo data from seed-data.js.
+// Run: npm run seed  (account list: docs/TEST_ACCOUNTS.md)
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
-
-const DEMO_PASSWORD = 'password123';
-
-const people = [
-  { name: 'Mark Lee', email: 'mark@chatbook.test', hometown: 'Dobbs Ferry, NY', relationship_status: 'Single', interests: 'Coding, fencing, the classics', about_me: 'Building things in my dorm room.' },
-  { name: 'Sara Chen', email: 'sara@chatbook.test', hometown: 'San Francisco, CA', relationship_status: 'In a relationship', interests: 'Photography, hiking', about_me: 'Always up for a road trip.' },
-  { name: 'Omar Haddad', email: 'omar@chatbook.test', hometown: 'Beirut, Lebanon', relationship_status: 'Single', interests: 'Football, chess, falafel', about_me: 'CS major. Ask me about chess.' },
-  { name: 'Emma Brown', email: 'emma@chatbook.test', hometown: 'Boston, MA', relationship_status: "It's complicated", interests: 'Music, theater', about_me: 'Lead vocals in a band nobody has heard of (yet).' },
-];
+import { DEMO_PASSWORD, conversations, emailFor, friendships, pendingRequests, posts, users } from './seed-data.js';
 
 const ago = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
 
-db.exec('DELETE FROM messages; DELETE FROM posts; DELETE FROM friendships; DELETE FROM users;');
-db.exec("DELETE FROM sqlite_sequence WHERE name IN ('users', 'friendships', 'posts', 'messages');");
+// Catch inconsistent seed data before touching the database.
+const pairKey = (a, b) => [a, b].sort().join('|');
+const friendSet = new Set(friendships.map(([a, b]) => pairKey(a, b)));
+const known = new Set(users.map((u) => u.key));
+for (const [a, b] of [...friendships, ...pendingRequests, ...posts.map(([x, y]) => [x, y]), ...conversations.map((c) => c.between)]) {
+  if (!known.has(a) || !known.has(b)) throw new Error(`Unknown user key in seed data: ${a} / ${b}`);
+}
+for (const [a, b] of pendingRequests) {
+  if (friendSet.has(pairKey(a, b))) throw new Error(`${a} and ${b} are both friends and pending`);
+}
+for (const { between: [a, b] } of conversations) {
+  if (!friendSet.has(pairKey(a, b))) throw new Error(`Conversation between non-friends: ${a} / ${b}`);
+}
+for (const [author, wall] of posts) {
+  if (author !== wall && !friendSet.has(pairKey(author, wall))) throw new Error(`Wall post between non-friends: ${author} / ${wall}`);
+}
 
-const hash = bcrypt.hashSync(DEMO_PASSWORD, 10);
-const insertUser = db.prepare(
-  `INSERT INTO users (name, email, password_hash, sex, birthday, hometown, relationship_status, interests, about_me, created_at)
-   VALUES (?, ?, ?, '', '', ?, ?, ?, ?, ?)`
-);
-const ids = people.map((p) =>
-  Number(insertUser.run(p.name, p.email, hash, p.hometown, p.relationship_status, p.interests, p.about_me, ago(10_000)).lastInsertRowid)
-);
-const [mark, sara, omar, emma] = ids;
+db.exec('BEGIN');
+try {
+  db.exec('DELETE FROM messages; DELETE FROM posts; DELETE FROM friendships; DELETE FROM users;');
+  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('users', 'friendships', 'posts', 'messages');");
 
-const friend = db.prepare('INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, ?, ?)');
-friend.run(mark, sara, 'accepted', ago(5000));
-friend.run(mark, omar, 'accepted', ago(4000));
-friend.run(sara, omar, 'accepted', ago(3000));
-friend.run(emma, mark, 'pending', ago(60));
+  const hash = bcrypt.hashSync(DEMO_PASSWORD, 10);
+  const insertUser = db.prepare(
+    `INSERT INTO users (name, email, password_hash, sex, birthday, hometown, relationship_status, interests, about_me, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const id = {};
+  users.forEach((u, i) => {
+    id[u.key] = Number(
+      insertUser.run(u.name, emailFor(u.key), hash, u.sex, u.birthday, u.hometown, u.relationship_status, u.interests, u.about_me, ago(20_000 - i * 100)).lastInsertRowid
+    );
+  });
 
-const post = db.prepare('INSERT INTO posts (author_id, wall_user_id, body, created_at) VALUES (?, ?, ?, ?)');
-post.run(mark, mark, 'is excited to launch this thing.', ago(300));
-post.run(sara, mark, 'Congrats on the launch! 🎉', ago(240));
-post.run(omar, sara, 'Chess rematch this weekend?', ago(120));
-post.run(sara, sara, 'just got back from Yosemite.', ago(45));
+  const friend = db.prepare('INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, ?, ?)');
+  for (const [a, b] of friendships) friend.run(id[a], id[b], 'accepted', ago(10_000));
+  for (const [from, to] of pendingRequests) friend.run(id[from], id[to], 'pending', ago(90));
 
-const message = db.prepare('INSERT INTO messages (sender_id, recipient_id, body, created_at, read_at) VALUES (?, ?, ?, ?, ?)');
-message.run(sara, mark, 'Hey! Saw your new site.', ago(30), ago(29));
-message.run(mark, sara, 'Thanks! Tell your friends 😄', ago(28), ago(27));
-message.run(omar, mark, 'Are you coming to the study group tonight?', ago(10), null);
+  const post = db.prepare('INSERT INTO posts (author_id, wall_user_id, body, created_at) VALUES (?, ?, ?, ?)');
+  for (const [author, wall, body, minutes] of [...posts].sort((a, b) => b[3] - a[3])) {
+    post.run(id[author], id[wall], body, ago(minutes));
+  }
 
-console.log(`Seeded ${ids.length} users. Log in with any of:`);
-for (const p of people) console.log(`  ${p.email}`);
-console.log('Password for all demo accounts is in server/src/seed.js (DEMO_PASSWORD).');
+  // Insert all messages in chronological order so ids follow time.
+  const allMessages = conversations.flatMap(({ between: [a, b], messages }) =>
+    messages.map(([sender, body, minutes, unread]) => ({ sender, recipient: sender === a ? b : a, body, minutes, unread }))
+  );
+  allMessages.sort((x, y) => y.minutes - x.minutes);
+  const message = db.prepare('INSERT INTO messages (sender_id, recipient_id, body, created_at, read_at) VALUES (?, ?, ?, ?, ?)');
+  for (const m of allMessages) {
+    message.run(id[m.sender], id[m.recipient], m.body, ago(m.minutes), m.unread ? null : ago(m.minutes - 1));
+  }
+  db.exec('COMMIT');
+
+  console.log(
+    `Seeded ${users.length} users, ${friendships.length} friendships, ${pendingRequests.length} pending requests, ` +
+      `${posts.length} wall posts and ${allMessages.length} messages.`
+  );
+  console.log('Accounts, passwords and relationships: docs/TEST_ACCOUNTS.md');
+} catch (err) {
+  db.exec('ROLLBACK');
+  throw err;
+}

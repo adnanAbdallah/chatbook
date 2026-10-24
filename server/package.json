@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
     "start": "node --disable-warning=ExperimentalWarning src/index.js",
-    "seed": "node --disable-warning=ExperimentalWarning src/seed.js"
+    "seed": "node --disable-warning=ExperimentalWarning src/seed.js",
+    "docs:accounts": "node src/gen-accounts-doc.js"
   },
   "engines": {
     "node": ">=22.13"
