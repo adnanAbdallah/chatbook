@@ -5,6 +5,8 @@ A small social network in the spirit of the earliest social sites, with real-tim
 - **web/** – Next.js (App Router, React 19) frontend on http://localhost:3000
 - **server/** – Node.js backend: Express REST API + Socket.io realtime + SQLite (Node's built-in `node:sqlite`, no DB server needed) on http://localhost:4000
 
+Full documentation (architecture, flowcharts, API reference, database schema) is in [docs/](docs/README.md).
+
 ## Features
 
 - Sign up / log in (bcrypt-hashed passwords, JWT sessions)
