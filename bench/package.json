@@ -1,0 +1,16 @@
+{
+  "name": "chatbook-bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Small sequential benchmark of the Chatbook API and chat (about 150 operations)",
+  "scripts": {
+    "start": "node bench.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
+  }
+}

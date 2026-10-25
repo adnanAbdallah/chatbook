@@ -33,7 +33,8 @@ Everything is plain JavaScript (ES modules on the server, JSX in the web app); t
 
 ```
 chat application/
-├── package.json            # root scripts: install:all, dev, seed, docs:accounts
+├── package.json            # root scripts: install:all, dev, seed, docs:accounts, bench
+├── bench/bench.js          # small sequential benchmark (npm run bench)
 ├── README.md               # quick start
 ├── docs/                   # ← you are here
 ├── server/                 # Node.js backend

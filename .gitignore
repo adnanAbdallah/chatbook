@@ -27,6 +27,9 @@ yarn-error.log*
 # test coverage
 coverage/
 
+# saved benchmark results (npm run bench -- --json bench/results/x.json)
+bench/results/
+
 # deployment
 .vercel/
 
